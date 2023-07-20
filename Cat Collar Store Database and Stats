@@ -1,0 +1,24 @@
+CREATE TABLE kitty_store (id INTEGER PRIMARY KEY, name TEXT, price INTEGER, quantity INTEGER, wholesale_price INTEGER);
+
+INSERT INTO kitty_store VALUES (1, "Rhinestone Collar", 5.50, 16, 2.15);
+INSERT INTO kitty_store VALUES (2, "Flower Collar", 4.75, 21, 1.25);
+INSERT INTO kitty_store VALUES (3, "Bright Collar RED", 3.25, 40, 0.25);
+INSERT INTO kitty_store VALUES (4, "Bell Collar", 4.00, 32, 1.05);
+INSERT INTO kitty_store VALUES (5, "Rainbow Collar", 4.25, 14, 0.89);
+INSERT INTO kitty_store VALUES (6, "Bright Collar Blue", 3.25, 34, 0.25);
+INSERT INTO kitty_store VALUES (7, "Bright Collar Yellow", 3.25, 22, 0.25);
+INSERT INTO kitty_store VALUES (8, "Bright Collar Green", 3.25, 29, 0.25);
+INSERT INTO kitty_store VALUES (9, "Bright Collar Purple", 3.25, 17, 0.25);
+INSERT INTO kitty_store VALUES (10, "Bright Collar Black", 3.25, 38, 0.25);
+INSERT INTO kitty_store VALUES (11, "Bright Collar Pink", 3.25, 30, 0.25);
+INSERT INTO kitty_store VALUES (12, "Spiked Collar", 6.25, 20, 4.00);
+INSERT INTO kitty_store VALUES (13, "Leather Collar Black", 10.00, 34, 5.00);
+INSERT INTO kitty_store VALUES (14, "Leather Collar Brown", 10.00, 23, 5.00);
+INSERT INTO kitty_store VALUES (15, "Leather Collar Red", 10.00, 12, 5.00);
+SELECT * FROM kitty_store;
+
+-- Order the items from least to most expensive.
+SELECT * FROM kitty_store ORDER BY price;
+
+-- What is the total number of product in the store?
+SELECT SUM(quantity) FROM kitty_store;
