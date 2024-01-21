@@ -1,0 +1,45 @@
+#In this SQL, I am querying multiple tables within a database to gather information on recruitment sources and costs per hire.
+
+# This is just testing the data from one table to check the how various employees came to the company.
+SELECT RecruitmentSource, 
+COUNT(RecruitmentSource) AS Total 
+FROM HRData
+GROUP BY RecruitmentSource
+ORDER BY Total DESC;
+
+# This query pulls data from both tables to find the total cost of avertising per source, the number of hires we had per source, as well as the cost per hire from each source.
+SELECT RecruitingCost."Employment Source",
+    RecruitingCost.Total AS TotalSpent,
+    COUNT(HRData.RecruitmentSource) AS Hires,
+    RecruitingCost.Total/COUNT(HRData.RecruitmentSource) AS CostPerHire 
+FROM RecruitingCost
+FULL Join HRData
+ON HRData.RecruitmentSource = RecruitingCost."Employment Source"
+WHERE "Employment Source" IS NOT NULL
+GROUP BY RecruitingCost."Employment Source"
+ORDER BY CostPerHire DESC;
+
+# Query testing to find the total of advertising from all sources.
+SELECT SUM(TOTAL)
+FROM RecruitingCost
+WHERE "Employment Source" IS NOT NULL;
+
+# Query to find the total number of hires for all sources.
+SELECT COUNT(RecruitmentSource)
+FROM HRData;
+
+# Query to find the average cost per hire from all sources.
+SELECT SUM(RecruitingCost.Total)/COUNT(HRData.RecruitmentSource) AS AverageCostPerHire
+FROM RecruitingCost
+FULL JOIN HRData
+ON HRData.RecruitmentSource - RecruitingCost."Employment Source";
+
+# This query shows the number of hires by source from most hires to least to see what source is working better.
+SELECT RecruitingCost."Employment Source",
+    COUNT(HRData.RecruitmentSource) AS Hires
+FROM RecruitingCost
+FULL Join HRData
+ON HRData.RecruitmentSource = RecruitingCost."Employment Source"
+WHERE "Employment Source" IS NOT NULL
+GROUP BY RecruitingCost."Employment Source"
+ORDER BY COUNT(HRData.RecruitmentSource) DESC;
