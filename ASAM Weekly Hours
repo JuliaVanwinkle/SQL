@@ -1,0 +1,156 @@
+if OBJECT_ID('tempdb..#ASAM') is not null 
+begin drop table #ASAM end 
+SELECT 
+     a.PATID
+    , a.v_patient_name
+	, ad.admission_date
+	, a.SERVICE_CODE
+    , FORMAT(a.date_of_service, 'MM/dd/yyyy') AS service_date
+    , FORMAT(CAST(a.start_time AS datetime), 'HH:mm') AS start_time
+    , FORMAT(CAST(a.end_time AS datetime), 'HH:mm') AS end_time
+    , FORMAT(CAST(a.duration AS int), '00') AS Duration
+	, CASE WHEN tpd.program_X_RRG_code IN ( '1015', '1033')
+				THEN 'Adult'
+			WHEN tpd.program_X_RRG_code IN ('1016')
+				THEN 'Youth'
+					ELSE 'Other'
+						END AS 'Youth/Adult'
+	, CASE WHEN (a.program_value LIKE ('%ASAM 1%') OR a.program_code IN ( 'SBASAMA111', 'SMASAMA139', 'SBASAMA154', 'SCASAMY131', 'SBASAMA140', 'CPASAMA380', 'KPASAMY560'))
+			THEN 'ASAM 1.0'
+				WHEN a.program_value LIKE ('%ASAM .5%')
+					THEN 'ASAM .5'
+						WHEN a.program_value LIKE ('%ASAM 2.1%')
+							THEN 'ASAM 2.1'
+								WHEN a.program_value LIKE ('%ASAM 2.5%')
+									THEN 'ASAM 2.5'
+										WHEN a.program_value LIKE ('%ASAM 3.1%')
+											THEN 'ASAM 3.1'										
+												WHEN a.program_value LIKE ('%ASAM 3.2%')
+													THEN 'ASAM 3.2'
+														WHEN a.program_value LIKE ('%ASAM 3.3%')
+															THEN 'ASAM 3.3'
+																WHEN a.program_value LIKE ('%ASAM 3.5%')
+																	THEN 'ASAM 3.5'
+																		ELSE 'ASAM'
+																			END AS ASAM_Program
+	, a.program_code
+	, tpd.program_value
+	, tpd.program_X_RRG_value
+	, a.program_value AS Organization
+	, pcd.ss_demographics_dict_12_value AS Region
+	, a.EPISODE_NUMBER
+INTO #ASAM
+FROM 
+    billing_tx_history a
+JOIN admission_data ad
+	ON ad.PATID = a.PATID AND ad.EPISODE_NUMBER = a.EPISODE_NUMBER
+JOIN patient_current_demographics pcd
+	ON pcd.PATID = a.PATID
+JOIN table_program_definition tpd
+	ON tpd.program_code = a.program_code
+WHERE 
+    a.program_value LIKE ('%ASAM%')
+	AND SERVICE_CODE IN ('H0025', 'H0004CO', 'T1006', 'T1003', '90792', 'H0007', 'H0005', '99214', 'H0038', 'H0004', 'H2015', 
+			'H000152', '99212', '99205', '99213', '99203', 'T1006FC', 'H0004TRM', 'H0005CO', 'T1002', 'H0004RELAP', 'H0001ANN')
+GROUP BY 
+     a.PATID
+    , a.v_patient_name
+	, ad.admission_date
+    , a.date_of_service
+    , a.start_time
+    , a.end_time
+	, a.duration
+	, a.program_code
+	, tpd.program_value
+	, a.program_value
+	, pcd.ss_demographics_dict_12_value
+	, tpd.program_X_RRG_value
+	, tpd.program_X_RRG_code
+	, a.EPISODE_NUMBER
+	, a.SERVICE_CODE
+
+---------------- Pulls all PATID, duration, DOS for ASAM where they received Individual Counseling/Psychotherapy ---------------------------
+if OBJECT_ID('tempdb..#Therapytable') is not null 
+begin drop table #Therapytable end 
+SELECT
+    PATID,
+    SERVICE_CODE,
+    FORMAT(DATEADD(DAY, 1 - DATEPART(WEEKDAY, service_date), service_date), 'MM/dd/yyyy') + ' - ' +
+		FORMAT(DATEADD(DAY, 7 - DATEPART(WEEKDAY, service_date), service_date), 'MM/dd/yyyy') AS WeekRange,
+    SUM(CONVERT(INT, Duration)) AS Ind_Therapy_Duration,
+    program_code,
+    CASE 
+        WHEN SUM(CONVERT(INT, Duration)) > 60 THEN 'Yes'
+        ELSE 'No'
+    END AS Ind_Therapy_Hours_Met
+INTO #Therapytable
+FROM #ASAM
+WHERE ASAM_Program IN ('ASAM 2.5', 'ASAM 3.5')
+AND LEFT(SERVICE_CODE, 5) = 'H0004'
+AND SERVICE_CODE <> 'H0004GPPPR'
+GROUP BY PATID,     
+	FORMAT(DATEADD(DAY, 1 - DATEPART(WEEKDAY, service_date), service_date), 'MM/dd/yyyy') + ' - ' +
+		FORMAT(DATEADD(DAY, 7 - DATEPART(WEEKDAY, service_date), service_date), 'MM/dd/yyyy')
+		, SERVICE_CODE
+    , program_code
+
+
+---------------- Adds the week range, breakdown of days and gets a status based on hourly thresholds for each program---------------------------
+if OBJECT_ID('tempdb..#weektable') is not null 
+begin drop table #weektable end 
+SELECT
+      a.PATID
+    , a.v_patient_name AS PatientName
+	, a.[Youth/Adult]
+	, a.ASAM_Program
+	, a.program_code
+    , FORMAT(a.admission_date, 'MM/dd/yyyy') AS AdmissionDate
+    , FORMAT(DATEADD(DAY, 1 - DATEPART(WEEKDAY, a.service_date), a.service_date), 'MM/dd/yyyy') + ' - ' +
+		FORMAT(DATEADD(DAY, 7 - DATEPART(WEEKDAY, a.service_date), a.service_date), 'MM/dd/yyyy') AS WeekRange
+    , FORMAT(SUM(CONVERT(INT, a.Duration)) / 60, '00') + ':' + 
+		FORMAT(SUM(CONVERT(INT, a.Duration)) % 60, '00') AS TotalHourMin
+    , SUM(CASE WHEN DATEPART(WEEKDAY, a.service_date) = 1 THEN a.Duration ELSE 0 END) AS Sunday
+    , SUM(CASE WHEN DATEPART(WEEKDAY, a.service_date) = 2 THEN a.Duration ELSE 0 END) AS Monday
+    , SUM(CASE WHEN DATEPART(WEEKDAY, a.service_date) = 3 THEN a.Duration ELSE 0 END) AS Tuesday
+    , SUM(CASE WHEN DATEPART(WEEKDAY, a.service_date) = 4 THEN a.Duration ELSE 0 END) AS Wednesday
+    , SUM(CASE WHEN DATEPART(WEEKDAY, a.service_date) = 5 THEN a.Duration ELSE 0 END) AS Thursday
+    , SUM(CASE WHEN DATEPART(WEEKDAY, a.service_date) = 6 THEN a.Duration ELSE 0 END) AS Friday
+    , SUM(CASE WHEN DATEPART(WEEKDAY, a.service_date) = 7 THEN a.Duration ELSE 0 END) AS Saturday
+    , SUM(CONVERT(INT, a.Duration)) AS TotalMinutes
+    , CASE WHEN a.[Youth/Adult] = 'Youth' AND ASAM_Program = 'ASAM 2.1' AND SUM(CONVERT(INT, a.Duration)) < 360 THEN '< 6 Hours' 
+			WHEN a.[Youth/Adult] = 'Adult' AND ASAM_Program = 'ASAM 2.1' AND SUM(CONVERT(INT, a.Duration)) < 540 THEN '< 9 Hours'
+				WHEN ASAM_Program = 'ASAM 2.1' AND SUM(CONVERT(INT, a.Duration)) > 1140 THEN '> 19 Hours'
+					WHEN ASAM_Program = 'ASAM 2.5' AND SUM(CONVERT(INT, a.Duration)) < 1200 THEN '< 20 Hours'
+						WHEN ASAM_Program = 'ASAM 3.5' AND SUM(CONVERT(INT, a.Duration)) < 1200 THEN '< 20 Hours'
+								ELSE 'Within Range'
+									END AS Status
+    , a.Organization
+	, a.Region
+INTO #weektable
+FROM
+    #ASAM a
+WHERE ASAM_Program IN ('ASAM 2.1', 'ASAM 2.5', 'ASAM 3.5')
+GROUP BY 
+   a.PATID
+    , FORMAT(DATEADD(DAY, 1 - DATEPART(WEEKDAY, a.service_date), a.service_date), 'MM/dd/yyyy') + ' - ' +
+    FORMAT(DATEADD(DAY, 7 - DATEPART(WEEKDAY, a.service_date), a.service_date), 'MM/dd/yyyy')
+    , a.[Youth/Adult]
+    , a.v_patient_name
+    , a.ASAM_Program
+    , a.program_code
+    , a.program_value
+    , a.admission_date
+    , a.Region
+	, a.Organization
+ORDER BY 
+    a.PATID
+	, WeekRange
+
+
+-----------Joins the weektable and Therapytable--------------
+SELECT  w.*
+	, t.Ind_Therapy_Duration
+	, t.Ind_Therapy_Hours_Met
+FROM #weektable w
+JOIN #Therapytable t
+	ON w.PATID = t.PATID AND w.WeekRange = t.WeekRange
